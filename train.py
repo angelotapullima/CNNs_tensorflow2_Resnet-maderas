@@ -11,6 +11,9 @@ import matplotlib.pyplot as plt
 from tensorflow import keras
 import os
 
+# Clear any logs from previous runs
+##!rm -rf ./logs/ 
+
 """
 
 LOG_DIR = './log'
@@ -19,6 +22,8 @@ get_ipython().system_raw(
     .format(LOG_DIR)
 )
 """
+
+
 def get_model():
     model = resnet50.ResNet50()
     if config.model == "resnet34":
@@ -46,6 +51,11 @@ if __name__ == '__main__':
     train_dataset, valid_dataset, test_dataset, train_count, valid_count, test_count = generate_datasets()
 
 
+    current_time = datetime.now().strftime("%Y%m%d-%H%M%S")
+    train_log_dir = 'logs/gradient_tape/' + current_time + '/train'
+    test_log_dir = 'logs/gradient_tape/' + current_time + '/test'
+    train_summary_writer = tf.summary.create_file_writer(train_log_dir)
+    test_summary_writer = tf.summary.create_file_writer(test_log_dir)
     # create model
     model = get_model()
 
@@ -53,10 +63,10 @@ if __name__ == '__main__':
     loss_object = tf.keras.losses.SparseCategoricalCrossentropy()
     optimizer = tf.keras.optimizers.Adadelta()
 
-    train_loss = tf.keras.metrics.Mean(name='train_loss')
+    train_loss = tf.keras.metrics.Mean(name='train_loss', dtype=tf.float32)
     train_accuracy = tf.keras.metrics.SparseCategoricalAccuracy(name='train_accuracy')
 
-    valid_loss = tf.keras.metrics.Mean(name='valid_loss')
+    valid_loss = tf.keras.metrics.Mean(name='valid_loss', dtype=tf.float32)
     valid_accuracy = tf.keras.metrics.SparseCategoricalAccuracy(name='valid_accuracy')
 
     @tf.function
@@ -88,7 +98,12 @@ if __name__ == '__main__':
         for images, labels in train_dataset:
             step += 1
             train_step(images, labels)
-            print("Epoch: {}/{}, step: {}/{}, loss: {:.5f}, accuracy: {:.5f}".format(epoch + 1,
+        with train_summary_writer.as_default():
+        	tf.summary.scalar('loss', train_loss.result(), step=epoch)
+        	tf.summary.scalar('accuracy', train_accuracy.result(), step=epoch)
+
+
+        print("Epoch: {}/{}, step: {}/{}, loss: {:.5f}, accuracy: {:.5f}".format(epoch + 1,
                                                                                      config.EPOCHS,
                                                                                      step,
                                                                                      math.ceil(train_count / config.BATCH_SIZE),
@@ -97,6 +112,9 @@ if __name__ == '__main__':
 
         for valid_images, valid_labels in valid_dataset:
             valid_step(valid_images, valid_labels)
+        with test_summary_writer.as_default():
+            tf.summary.scalar('loss', valid_loss.result(), step=epoch)
+            tf.summary.scalar('accuracy', valid_accuracy.result(), step=epoch)
 
         print("Epoch: {}/{}, train loss: {:.5f}, train accuracy: {:.5f}, "
               "valid loss: {:.5f}, valid accuracy: {:.5f}".format(epoch + 1,
@@ -108,10 +126,17 @@ if __name__ == '__main__':
 
     model.save_weights(filepath=config.save_model_dir, save_format='tf')
 
+    
+
+"""
+
+para abrir el cuaderno de tensorboard debemos entrar desde la terminal y digitar este codigo :tensorboard --logdir logs/gradient_tape
+
+
 
 logdir = os.path.join("log", datetime.now().strftime("%Y%m%d-%H%M%S"))
 tensorboard_callback = keras.callbacks.TensorBoard(log_dir=logdir,write_images=True)
-    
+
 model.compile(optimizer='Adadelta',
               loss='binary_crossentropy',
               metrics=['accuracy']) ##compil
@@ -142,4 +167,4 @@ plt.title('model loss')
 plt.ylabel('loss')
 plt.xlabel('epoch')
 plt.legend(['train', 'test'], loc='upper left')
-plt.savefig('Curva_aprendizaje_loss.png')
+plt.savefig('Curva_aprendizaje_loss.png')"""
